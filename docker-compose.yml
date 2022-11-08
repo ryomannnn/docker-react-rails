@@ -1,0 +1,93 @@
+version: '3.9'
+services:
+  web:
+    build: 
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: web_container
+    env_file:
+      - ./environment/web.env
+    command: /usr/sbin/nginx -g 'daemon off;' -c /etc/nginx/app.conf
+    ports:
+      - "80:80"
+    volumes:
+      - public-data:/app/public
+      - tmp-data:/app/tmp
+      - ./nginx:/etc/nginx/conf.d
+    depends_on:
+      frontend:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    
+  db:
+    image: mysql:8.0
+    container_name: db_container
+    env_file:
+      - ./environment/db.env
+    ports:
+      - "3306:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./mysql/config:/etc/mysql
+    healthcheck:
+      test: ["CMD", "pwd"]
+      interval: 1s
+      timeout: 1s
+      retries: 3
+      start_period: 1s
+    
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: ${BUILD_MODE}
+    container_name: front_container
+    env_file:
+      - ./environment/front.env
+    command: tail -f /dev/null
+    ports:
+      - "3000:3000"
+    volumes:
+      - public-data:/app/dist
+    healthcheck:
+      test: ["CMD", "pwd"]
+      interval: 1s
+      timeout: 1s
+      retries: 3
+      start_period: 1s
+    tty: true
+    stdin_open: true
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: api_container
+    env_file:
+      - ./environment/api.env
+    command: tail -f /dev/null 
+    ports:
+      - "4000:4000"
+    volumes:
+      - tmp-data:/app/tmp
+      - log-data:/app/log
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pwd"]
+      interval: 1s
+      timeout: 1s
+      retries: 3
+      start_period: 1s
+    tty: true
+    stdin_open: true
+
+volumes:
+  db-data:
+    driver: local
+  public-data:
+  tmp-data:
+  log-data:
